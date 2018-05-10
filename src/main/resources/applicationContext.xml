@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:aop="http://www.springframework.org/schema/aop" xmlns:tx="http://www.springframework.org/schema/tx"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+    http://www.springframework.org/schema/beans/spring-beans-3.0.xsd 
+    http://www.springframework.org/schema/aop 
+    http://www.springframework.org/schema/aop/spring-aop-3.0.xsd 
+    http://www.springframework.org/schema/tx
+    http://www.springframework.org/schema/tx/spring-tx-3.1.xsd
+    http://www.springframework.org/schema/context
+	http://www.springframework.org/schema/context/spring-context-4.2.xsd">
+	
+	
+	 <!-- 开启自动扫包 -->
+	 <context:component-scan base-package="com.xgb">
+		 <!--制定扫包规则，不扫描@Controller注解的JAVA类，其他的还是要扫描  -->
+	     <context:exclude-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
+	 </context:component-scan>
+	
+	<!-- AOP注解开启配置 -->
+    <aop:aspectj-autoproxy/>
+    
+	<!-- 引入外部数据源配置信息 -->
+	<bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+		<property name="locations">
+			<list>
+				<value>classpath:datasource.properties</value>
+			</list>
+		</property>
+	</bean>
+	
+	<!-- 配置Master连接池 -->  
+	<bean id="masterDataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource" destroy-method="close">
+		<!-- 数据库驱动 -->  
+        <property name="driverClass" value="${jdbc.master.driver}" />  
+        <!-- 相应驱动的jdbcUrl -->  
+        <property name="jdbcUrl" value="${jdbc.master.url}" />  
+        <!-- 数据库的用户名 -->  
+        <property name="username" value="${jdbc.master.username}" />  
+        <!-- 数据库的密码 -->  
+        <property name="password" value="${jdbc.master.password}" />  
+        <!-- 检查数据库连接池中空闲连接的间隔时间，单位是分，默认值：240，如果要取消则设置为0 -->  
+        <property name="idleConnectionTestPeriod" value="60" />  
+        <!-- 连接池中未使用的链接最大存活时间，单位是分，默认值：60，如果要永远存活设置为0 -->  
+        <property name="idleMaxAge" value="30" />  
+        <!-- 每个分区最大的连接数 -->  
+        <property name="maxConnectionsPerPartition" value="150" />  
+        <!-- 每个分区最小的连接数 -->  
+        <property name="minConnectionsPerPartition" value="5" />  
+	</bean>
+	 
+	<!-- 配置Slave01连接池 -->  
+    <bean id="slave01DataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource" destroy-method="close">  
+        <!-- 数据库驱动 -->  
+        <property name="driverClass" value="${jdbc.slave01.driver}" />  
+        <!-- 相应驱动的jdbcUrl -->  
+        <property name="jdbcUrl" value="${jdbc.slave01.url}" />  
+        <!-- 数据库的用户名 -->  
+        <property name="username" value="${jdbc.slave01.username}" />  
+        <!-- 数据库的密码 -->  
+        <property name="password" value="${jdbc.slave01.password}" />  
+        <!-- 检查数据库连接池中空闲连接的间隔时间，单位是分，默认值：240，如果要取消则设置为0 -->  
+        <property name="idleConnectionTestPeriod" value="60" />  
+        <!-- 连接池中未使用的链接最大存活时间，单位是分，默认值：60，如果要永远存活设置为0 -->  
+        <property name="idleMaxAge" value="30" />  
+        <!-- 每个分区最大的连接数 -->  
+        <property name="maxConnectionsPerPartition" value="150" />  
+        <!-- 每个分区最小的连接数 -->  
+        <property name="minConnectionsPerPartition" value="5" />  
+    </bean>  
+    
+	<!-- 定义数据源，使用自己实现的数据源 -->  
+	<bean id="dataSource" class="cn.itcast.usermanage.spring.DynamicDataSource">
+		<!-- 设置多个数据源 -->
+		<property name="targetDataSources">
+			<map key-type="java.lang.String">
+				<entry key="master" value-ref="masterDataSource"></entry>
+				<entry key="slave" value-ref="slave01DataSource"></entry>
+			</map>
+		</property>
+		
+		<!-- 设置默认的数据源，这里默认走写库 -->
+		<property name="defaultTargetDataSource" ref="masterDataSource"></property>
+	</bean>
+	
+	<!-- 配置Session工厂 -->
+	<bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+		<property name="dataSource" ref="dataSource"></property>
+		<!-- 自动扫描需要定义类别名的包，将包内的JAVA类的类名作为类别名 -->
+		<property name="typeAliasesPackage" value="com.wisdom.travel.entity"></property>
+	</bean>
+	
+	<!-- 自动扫描所有的Mapper接口与文件 -->
+	<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+		<property name="basePackage" value="com.wisdom.travel.mapper"></property>
+	</bean>
+	
+	<!-- 配置事务管理器 -->
+	<bean id="transactionManager"
+		class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dataSource"></property>
+	</bean>
+	
+	<!-- 定义事务策略 -->
+    <tx:advice id="txAdvice" transaction-manager="transactionManager">  
+    	<tx:attributes>
+    		<!--定义查询方法都是只读的 -->  
+    		<tx:method name="query*" read-only="true"/>
+    		<tx:method name="find*" read-only="true"/>
+    		<tx:method name="get*" read-only="true"/>
+    		
+    		<!-- 主库执行操作，事务传播行为定义为默认行为 -->  
+    		<tx:method name="save*" propagation="REQUIRED"/>
+    		<tx:method name="update*" propagation="REQUIRED"/>
+    		<tx:method name="delete*" propagation="REQUIRED"/>
+    		
+    		<!--其他方法使用默认事务策略 -->
+    		<tx:method name="*"/>
+    	</tx:attributes>
+    </tx:advice>
+	
+	
+	<bean class="com.xgb.mysql.aop.DataSourceAspect" id="dataSourceAspect">
+		<!-- 指定事务策略 -->  
+		<property name="txAdvice" ref="txAdvice"></property>
+		<!-- 指定slave方法的前缀（非必须） -->
+		<property name="slaveMethodStart" value="query,find,get"></property>
+	</bean>
+	
+	<!-- 定义AOP切面处理器 -->
+	<aop:config>
+		<!-- 定义切面，所有的service的所有方法 -->
+		<aop:pointcut expression="execution(com.xgb.mysql.service.*.*(..))" id="txPointcut"/>
+		<!-- 应用事务策略到Service切面 -->
+		<aop:advisor advice-ref="txAdvice" pointcut="txPointcut"/>
+		
+		<!-- 将切面应用到自定义的切面处理器上，-9999保证该切面优先级最高执行 --> 
+		<aop:aspect ref="dataSourceAspect" order="-9999">
+			<aop:before method="before" pointcut-ref="txPointcut"/>
+		</aop:aspect>
+	</aop:config>
+	
+</beans>

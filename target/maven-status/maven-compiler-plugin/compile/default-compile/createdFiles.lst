@@ -1,0 +1,8 @@
+com\xgb\mysql\service\UserService.class
+com\xgb\mysql\service\impl\UserServiceImpl.class
+com\xgb\mysql\entity\User.class
+com\xgb\mysql\data\DynamicDataSource.class
+com\xgb\mysql\dao\UserMapper.class
+com\xgb\mysql\controller\UserController.class
+com\xgb\mysql\aop\DataSourceAspect.class
+com\xgb\mysql\data\DynamicDataSourceHolder.class
